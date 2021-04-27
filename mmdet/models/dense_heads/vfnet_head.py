@@ -397,37 +397,36 @@ class VFNetHead(ATSSHead, FCOSHead):
         else:
             num_pos_avg_per_gpu = num_pos
 
-        if num_pos > 0:
-            pos_bbox_targets = flatten_bbox_targets[pos_inds]
-            pos_points = flatten_points[pos_inds]
+        pos_bbox_targets = flatten_bbox_targets[pos_inds]
+        pos_points = flatten_points[pos_inds]
 
-            pos_decoded_bbox_preds = distance2bbox(pos_points, pos_bbox_preds)
-            pos_decoded_target_preds = distance2bbox(pos_points,
-                                                     pos_bbox_targets)
-            iou_targets_ini = bbox_overlaps(
-                pos_decoded_bbox_preds,
-                pos_decoded_target_preds.detach(),
-                is_aligned=True).clamp(min=1e-6)
-            bbox_weights_ini = iou_targets_ini.clone().detach()
-            iou_targets_ini_avg_per_gpu = reduce_mean(
-                bbox_weights_ini.sum()).item()
-            bbox_avg_factor_ini = max(iou_targets_ini_avg_per_gpu, 1.0)
+        pos_decoded_bbox_preds = distance2bbox(pos_points, pos_bbox_preds)
+        pos_decoded_target_preds = distance2bbox(pos_points, pos_bbox_targets)
+        iou_targets_ini = bbox_overlaps(
+            pos_decoded_bbox_preds,
+            pos_decoded_target_preds.detach(),
+            is_aligned=True).clamp(min=1e-6)
+        bbox_weights_ini = iou_targets_ini.clone().detach()
+        bbox_avg_factor_ini = reduce_mean(
+            bbox_weights_ini.sum()).clamp_(min=1).item()
+
+        pos_decoded_bbox_preds_refine = \
+            distance2bbox(pos_points, pos_bbox_preds_refine)
+        iou_targets_rf = bbox_overlaps(
+            pos_decoded_bbox_preds_refine,
+            pos_decoded_target_preds.detach(),
+            is_aligned=True).clamp(min=1e-6)
+        bbox_weights_rf = iou_targets_rf.clone().detach()
+        bbox_avg_factor_rf = reduce_mean(
+            bbox_weights_rf.sum()).clamp_(min=1).item()
+
+        if num_pos > 0:
             loss_bbox = self.loss_bbox(
                 pos_decoded_bbox_preds,
                 pos_decoded_target_preds.detach(),
                 weight=bbox_weights_ini,
                 avg_factor=bbox_avg_factor_ini)
 
-            pos_decoded_bbox_preds_refine = \
-                distance2bbox(pos_points, pos_bbox_preds_refine)
-            iou_targets_rf = bbox_overlaps(
-                pos_decoded_bbox_preds_refine,
-                pos_decoded_target_preds.detach(),
-                is_aligned=True).clamp(min=1e-6)
-            bbox_weights_rf = iou_targets_rf.clone().detach()
-            iou_targets_rf_avg_per_gpu = reduce_mean(
-                bbox_weights_rf.sum()).item()
-            bbox_avg_factor_rf = max(iou_targets_rf_avg_per_gpu, 1.0)
             loss_bbox_refine = self.loss_bbox_refine(
                 pos_decoded_bbox_preds_refine,
                 pos_decoded_target_preds.detach(),

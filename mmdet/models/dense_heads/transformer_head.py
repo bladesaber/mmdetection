@@ -77,11 +77,10 @@ class TransformerHead(AnchorFreeHead):
                  train_cfg=dict(
                      assigner=dict(
                          type='HungarianAssigner',
-                         cls_weight=1.,
-                         bbox_weight=5.,
-                         iou_weight=2.,
-                         iou_calculator=dict(type='BboxOverlaps2D'),
-                         iou_mode='giou')),
+                         cls_cost=dict(type='ClassificationCost', weight=1.),
+                         reg_cost=dict(type='BBoxL1Cost', weight=5.0),
+                         iou_cost=dict(
+                             type='IoUCost', iou_mode='giou', weight=2.0))),
                  test_cfg=dict(max_per_img=100),
                  **kwargs):
         # NOTE here use `AnchorFreeHead` instead of `TransformerHead`,
@@ -124,13 +123,13 @@ class TransformerHead(AnchorFreeHead):
             assert 'assigner' in train_cfg, 'assigner should be provided '\
                 'when train_cfg is set.'
             assigner = train_cfg['assigner']
-            assert loss_cls['loss_weight'] == assigner['cls_weight'], \
+            assert loss_cls['loss_weight'] == assigner['cls_cost']['weight'], \
                 'The classification weight for loss and matcher should be' \
                 'exactly the same.'
-            assert loss_bbox['loss_weight'] == assigner['bbox_weight'], \
-                'The regression L1 weight for loss and matcher should be' \
-                'exactly the same.'
-            assert loss_iou['loss_weight'] == assigner['iou_weight'], \
+            assert loss_bbox['loss_weight'] == assigner['reg_cost'][
+                'weight'], 'The regression L1 weight for loss and matcher ' \
+                'should be exactly the same.'
+            assert loss_iou['loss_weight'] == assigner['iou_cost']['weight'], \
                 'The regression iou weight for loss and matcher should be' \
                 'exactly the same.'
             self.assigner = build_assigner(assigner)
@@ -234,7 +233,7 @@ class TransformerHead(AnchorFreeHead):
         # NOTE following the official DETR repo, non-zero values representing
         # ignored positions, while zero values means valid positions.
         batch_size = x.size(0)
-        input_img_h, input_img_w = img_metas[0]['batch_intput_shape']
+        input_img_h, input_img_w = img_metas[0]['batch_input_shape']
         masks = x.new_ones((batch_size, input_img_h, input_img_w))
         for img_id in range(batch_size):
             img_h, img_w, _ = img_metas[img_id]['img_shape']
@@ -583,7 +582,7 @@ class TransformerHead(AnchorFreeHead):
                 [nb_dec, bs, num_query, 4].
             img_metas (list[dict]): Meta information of each image.
             rescale (bool, optional): If True, return boxes in original
-                image space. Defalut False.
+                image space. Default False.
 
         Returns:
             list[list[Tensor, Tensor]]: Each item in result_list is 2-tuple. \
@@ -594,7 +593,7 @@ class TransformerHead(AnchorFreeHead):
                 the corresponding box.
         """
         # NOTE defaultly only using outputs from the last feature level,
-        # and only the ouputs from the last decoder layer is used.
+        # and only the outputs from the last decoder layer is used.
         cls_scores = all_cls_scores_list[-1][-1]
         bbox_preds = all_bbox_preds_list[-1][-1]
 
